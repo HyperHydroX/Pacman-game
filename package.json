@@ -1,0 +1,35 @@
+{
+  "name": "threejs-course",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HyperHydroX/threejs-course.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/HyperHydroX/threejs-course/issues"
+  },
+  "homepage": "https://github.com/HyperHydroX/threejs-course#readme",
+  "devDependencies": {
+    "@parcel/config-default": "^2.8.2",
+    "parcel": "^2.8.2"
+  },
+  "dependencies": {
+    "cannon-es": "^0.20.0",
+    "dat.gui": "^0.7.9",
+    "gsap": "^3.11.4",
+    "parcel-reporter-static-files-copy": "^1.5.0",
+    "three": "^0.148.0",
+    "yuka": "^0.7.8"
+  },
+  "staticFiles": {
+    "staticOutPath": "assets"
+  }
+}
