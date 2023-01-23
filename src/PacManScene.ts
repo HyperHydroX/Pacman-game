@@ -1,14 +1,18 @@
-import dat from "dat.gui";
 import * as THREE from "three";
+import * as YUKA from "yuka";
 
 export default class PacManScene extends THREE.Scene {
   private readonly camera: THREE.PerspectiveCamera;
 
   private spotLight?: THREE.SpotLight;
 
+  private readonly time = new YUKA.Time();
+  private readonly entityManager = new YUKA.EntityManager();
+
+  private pacMan?: THREE.Mesh;
+
   constructor(camera: THREE.PerspectiveCamera) {
     super();
-    // ...
     this.camera = camera;
   }
 
@@ -23,14 +27,14 @@ export default class PacManScene extends THREE.Scene {
     this.spotLight.castShadow = true;
     this.spotLight.angle = 0.2;
 
-    const sLightHelper = new THREE.SpotLightHelper(this.spotLight);
-    this.add(sLightHelper);
+    // const sLightHelper = new THREE.SpotLightHelper(this.spotLight);
+    // this.add(sLightHelper);
 
-    // PlaneMesh
+    // Plane
     const planeMesh = new THREE.Mesh(
       new THREE.PlaneGeometry(30, 30),
       new THREE.MeshStandardMaterial({
-        color: 0xeaff00,
+        color: 0x333333,
         side: THREE.DoubleSide,
       })
     );
@@ -38,52 +42,96 @@ export default class PacManScene extends THREE.Scene {
     planeMesh.rotation.x = Math.PI * 0.5;
     planeMesh.receiveShadow = true;
 
-    const gridHelper = new THREE.GridHelper(30);
-    this.add(gridHelper);
-
-    //#region Sphere
-    const SphereGeometry = new THREE.SphereGeometry(4, 50, 50);
+    // PacMan
+    const SphereGeometry = new THREE.SphereGeometry(1, 50, 50);
     const sphereMaterial = new THREE.MeshStandardMaterial({
       color: 0x0000ff,
       wireframe: false,
     });
-    const sphere = new THREE.Mesh(SphereGeometry, sphereMaterial);
-    this.add(sphere);
+    this.pacMan = new THREE.Mesh(SphereGeometry, sphereMaterial);
+    this.pacMan.position.y = 1;
+    this.add(this.pacMan);
 
-    sphere.position.set(-7.5, 0, 0);
-    sphere.position.y = 4;
-    sphere.castShadow = true;
+    this.pacMan.receiveShadow = true;
+    this.pacMan.castShadow = true;
+
+    // Bounding box
+    // let pacManBB = new THREE.Sphere(pacMan.position, 1);
+    // console.log(pacManBB);
+
+    let pacManBB = new THREE.Box3(new THREE.Vector3(), new THREE.Vector3());
+    // Get values from your mesh
+    pacManBB.setFromObject(this.pacMan);
+    console.log(pacManBB);
+
+    // Ghost
+    const ghost = new THREE.Mesh(
+      new THREE.SphereGeometry(1, 50, 50),
+      new THREE.MeshPhongMaterial({ color: 0xff0000 })
+    );
+    ghost.matrixAutoUpdate = false;
+    ghost.position.y = 1;
+    this.add(ghost);
+
+    ghost.castShadow = true;
+
+    // Bounding box
+    let ghostBB = new THREE.Sphere(ghost.position, 1);
+    console.log(ghostBB);
     //#endregion
 
-    // #region GUI
-    const gui = new dat.GUI();
-
-    const options = {
-      sphereColor: "#ffea00",
-      wireframe: false,
-      speed: 0.01,
-      angle: 0.2,
-      penumbra: 0,
-      intensity: 1,
+    //#region Yuka
+    const sync = (
+      entity: { worldMatrix: any },
+      renderComponent: { matrix: { copy: (arg0: any) => void } }
+    ) => {
+      renderComponent.matrix.copy(entity.worldMatrix);
     };
 
-    gui.addColor(options, "sphereColor").onChange((e) => {
-      sphere.material.color.set(e);
-    });
+    const pursuer = new YUKA.Vehicle();
+    pursuer.setRenderComponent(ghost, sync);
+    this.entityManager.add(pursuer);
+    pursuer.position.set(-2, 4, -3);
+    pursuer.maxSpeed = 3;
 
-    gui.add(options, "wireframe").onChange((e) => {
-      sphere.material.wireframe = e;
-    });
+    const evader = new YUKA.Vehicle();
+    evader.setRenderComponent(this.pacMan, sync);
+    this.entityManager.add(evader);
+    // evader.position.set(2, 4, -3);
+    // evader.maxSpeed = 5;
 
-    gui.add(options, "speed", 0, 0.1);
+    const pursuitBehavior = new YUKA.PursuitBehavior(evader, 5);
+    pursuer.steering.add(pursuitBehavior);
 
-    gui.add(options, "angle", 0, 1);
-    gui.add(options, "penumbra", 0, 1);
-    gui.add(options, "intensity", 0, 1);
+    // const evaderTarget = new YUKA.Vector3();
+    // const seekBehavior = new YUKA.SeekBehavior(evaderTarget);
+    // evader.steering.add(seekBehavior);
+    //#endregion
+
+    //#region Keyboardinput
+    document.onkeydown = (e) => {
+      if (e.key === "ArrowUp") {
+        this.pacMan.position.z -= 1;
+        evader.position.z -= 1;
+      }
+      if (e.key === "ArrowDown") {
+        this.pacMan.position.z += 1;
+        evader.position.z += 1;
+      }
+      if (e.key === "ArrowRight") {
+        this.pacMan.position.x += 1;
+        evader.position.x += 1;
+      }
+      if (e.key === "ArrowLeft") {
+        this.pacMan.position.x -= 1;
+        evader.position.x -= 1;
+      }
+    };
     //#endregion
   }
 
   update() {
-    // ...
+    const delta = this.time.update().getDelta();
+    this.entityManager.update(delta);
   }
 }
