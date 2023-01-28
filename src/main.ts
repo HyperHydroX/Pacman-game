@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import Stats from "stats.js";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
+// import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 
 import PacManScene from "./PacManScene";
 
@@ -12,13 +12,13 @@ const renderer = new THREE.WebGLRenderer({
   antialias: true,
 });
 renderer.setSize(width, height);
-renderer.setClearColor(0x111111);
+renderer.setClearColor(0x000000, 1.0);
 
-const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
-camera.position.set(-10, 10, 30);
+const camera = new THREE.PerspectiveCamera(65, width / height, 0.1, 1000);
+// camera.position.set(-10, 10, 30);
 
-const orbitControls = new OrbitControls(camera, renderer.domElement);
-orbitControls.update();
+// const orbitControls = new OrbitControls(camera, renderer.domElement);
+// orbitControls.update();
 
 const scene = new PacManScene(camera);
 scene.initialize();

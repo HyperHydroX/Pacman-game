@@ -9,23 +9,7 @@ export default class PacManScene extends THREE.Scene {
   private readonly time = new YUKA.Time();
   private readonly entityManager = new YUKA.EntityManager();
 
-  private readonly KeyDown = new Set<string>();
   private pacMan?: THREE.Mesh;
-  private keys: any = {};
-
-  private PACMAN_SPEED = 2;
-  private PACMAN_RADIUS = 0.25;
-  private GHOST_SPEED = 1.5;
-  private GHOST_RADIUS = this.PACMAN_RADIUS * 1.25;
-  private DOT_RADIUS = 0.05;
-  private PELLET_RADIUS = this.DOT_RADIUS * 2;
-
-  private readonly UP = new THREE.Vector3(0, 0, 1);
-  private readonly LEFT = new THREE.Vector3(-1, 0, 0);
-  private readonly TOP = new THREE.Vector3(0, 1, 0);
-  private readonly RIGHT = new THREE.Vector3(1, 0, 0);
-  private readonly BOTTOM = new THREE.Vector3(0, -1, 0);
-
   private map: {
     centerY: number;
     centerX: number;
@@ -34,7 +18,7 @@ export default class PacManScene extends THREE.Scene {
     left: number;
     right: number;
     numDots: number;
-    pacManSpawn: THREE.Vector3;
+    pacManSpwan: THREE.Vector3;
     ghostSpawn: THREE.Vector3;
   } = {};
 
@@ -53,7 +37,7 @@ export default class PacManScene extends THREE.Scene {
     "          # . # #                     # # . #          ",
     "          # . # #   # # #     # # #   # # . #          ",
     "# # # # # # . # #   #             #   # # . # # # # # #",
-    "            .       #     G P     #       .            ",
+    "            .       #     G       #       .            ",
     "# # # # # # . # #   #             #   # # . # # # # # #",
     "          # . # #   # # # # # # # #   # # . #          ",
     "          # . # #                     # # . #          ",
@@ -62,7 +46,7 @@ export default class PacManScene extends THREE.Scene {
     "# . . . . . . . . . . . . # # . . . . . . . . . . . . #",
     "# . # # # # . # # # # # . # # . # # # # # . # # # # . #",
     "# . # # # # . # # # # # . # # . # # # # # . # # # # . #",
-    "# o . . # # . . . . . . .     . . . . . . . # # . . o #",
+    "# o . . # # . . . . . . . P   . . . . . . . # # . . o #",
     "# # # . # # . # # . # # # # # # # # . # # . # # . # # #",
     "# # # . # # . # # . # # # # # # # # . # # . # # . # # #",
     "# . . . . . . # # . . . . # # . . . . # # . . . . . . #",
@@ -88,60 +72,118 @@ export default class PacManScene extends THREE.Scene {
     this.spotLight.castShadow = true;
     this.spotLight.angle = 0.2;
 
-    // Camera
-    this.camera.up.copy(this.UP);
-    this.camera.targetPosition = new THREE.Vector3();
-    this.camera.targetLookAt = new THREE.Vector3();
-    this.camera.lookAt = new THREE.Vector3();
+    // const sLightHelper = new THREE.SpotLightHelper(this.spotLight);
+    // this.add(sLightHelper);
+
+    // Plane
+    const planeMesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(30, 30),
+      new THREE.MeshStandardMaterial({
+        color: 0x333333,
+        side: THREE.DoubleSide,
+      })
+    );
+    this.add(planeMesh);
+    planeMesh.rotation.x = Math.PI * 0.5;
+    planeMesh.position.y = -1;
+    planeMesh.receiveShadow = true;
+
+    // PacMan
+    const SphereGeometry = new THREE.SphereGeometry(1, 50, 50);
+    const sphereMaterial = new THREE.MeshStandardMaterial({
+      color: 0xfeff00,
+      wireframe: false,
+    });
+    this.pacMan = new THREE.Mesh(SphereGeometry, sphereMaterial);
+    this.add(this.pacMan);
+
+    this.pacMan.receiveShadow = true;
+    this.pacMan.castShadow = true;
+
+    // Bounding box
+    // let pacManBB = new THREE.Sphere(pacMan.position, 1);
+    // console.log(pacManBB);
+
+    let pacManBB = new THREE.Box3(new THREE.Vector3(), new THREE.Vector3());
+    // Get values from your mesh
+    pacManBB.setFromObject(this.pacMan);
+    console.log(pacManBB);
+
+    // Ghost
+    const ghost = new THREE.Mesh(
+      new THREE.SphereGeometry(1, 50, 50),
+      new THREE.MeshPhongMaterial({ color: 0xff0000 })
+    );
+    ghost.matrixAutoUpdate = false;
+    this.add(ghost);
+
+    ghost.castShadow = true;
+
+    // Bounding box
+    let ghostBB = new THREE.Sphere(ghost.position, 1);
+    console.log(ghostBB);
+    //#endregion
 
     //#region Test
-    this.keys = this.createKeyState();
     this.map = this.createMap(this, this.LEVEL);
     let numDotsEaten = 0;
-    this.pacMan = this.createPacMan(this, this.map.pacManSpawn);
 
     const hudCamera = this.createHudCamera(this.map);
 
     //#endregion
 
     //#region Yuka
-    // const sync = (
-    //   entity: { worldMatrix: any },
-    //   renderComponent: { matrix: { copy: (arg0: any) => void } }
-    // ) => {
-    //   renderComponent.matrix.copy(entity.worldMatrix);
-    // };
+    const sync = (
+      entity: { worldMatrix: any },
+      renderComponent: { matrix: { copy: (arg0: any) => void } }
+    ) => {
+      renderComponent.matrix.copy(entity.worldMatrix);
+    };
 
-    // const pursuer = new YUKA.Vehicle();
-    // pursuer.setRenderComponent(ghost, sync);
-    // this.entityManager.add(pursuer);
-    // pursuer.position.set(-2, 0, -3);
-    // pursuer.maxSpeed = 3;
+    const pursuer = new YUKA.Vehicle();
+    pursuer.setRenderComponent(ghost, sync);
+    this.entityManager.add(pursuer);
+    pursuer.position.set(-2, 0, -3);
+    pursuer.maxSpeed = 3;
 
-    // const evader = new YUKA.Vehicle();
-    // evader.setRenderComponent(this.pacMan, sync);
-    // this.entityManager.add(evader);
-    // // evader.position.set(2, 4, -3);
-    // // evader.maxSpeed = 5;
+    const evader = new YUKA.Vehicle();
+    evader.setRenderComponent(this.pacMan, sync);
+    this.entityManager.add(evader);
+    // evader.position.set(2, 4, -3);
+    // evader.maxSpeed = 5;
 
-    // const pursuitBehavior = new YUKA.PursuitBehavior(evader, 5);
-    // pursuer.steering.add(pursuitBehavior);
+    const pursuitBehavior = new YUKA.PursuitBehavior(evader, 5);
+    pursuer.steering.add(pursuitBehavior);
 
-    // // const evaderTarget = new YUKA.Vector3();
-    // // const seekBehavior = new YUKA.SeekBehavior(evaderTarget);
-    // // evader.steering.add(seekBehavior);
+    // const evaderTarget = new YUKA.Vector3();
+    // const seekBehavior = new YUKA.SeekBehavior(evaderTarget);
+    // evader.steering.add(seekBehavior);
+    //#endregion
+
+    //#region Keyboardinput
+    document.onkeydown = (e) => {
+      if (e.key === "ArrowUp") {
+        this.pacMan.position.z -= 1;
+        evader.position.z -= 1;
+      }
+      if (e.key === "ArrowDown") {
+        this.pacMan.position.z += 1;
+        evader.position.z += 1;
+      }
+      if (e.key === "ArrowRight") {
+        this.pacMan.position.x += 1;
+        evader.position.x += 1;
+      }
+      if (e.key === "ArrowLeft") {
+        this.pacMan.position.x -= 1;
+        evader.position.x -= 1;
+      }
+    };
     //#endregion
   }
 
   private createMap = (scene: any, level: any[]) => {
-    const map: any = {};
-    map.bottom = -(level.length - 1);
-    map.top = 0;
-    map.left = 0;
-    map.right = 0;
-    map.numDots = 0;
-    map.pacManSpawn = null;
-    map.ghostSpawn = null;
+    this.map.bottom = -(level.length - 1);
 
     let x, y: any;
 
@@ -149,14 +191,12 @@ export default class PacManScene extends THREE.Scene {
       // Set coordinates of the map so that they match the coordinate system for objects
       y = -row;
 
-      //@ts-ignore
-      map[y] = {};
-      // console.log((map[y] = {}));
+      this.map[y] = {};
 
       // Get length of the longest row
       const length = Math.floor(level[row].length / 2);
 
-      map.right = Math.max(map.right, length);
+      this.map.right = Math.max(this.map.right, length);
 
       // Skip every second element, which is used as space
       for (let column = 0; column < level[row].length; column += 2) {
@@ -172,40 +212,38 @@ export default class PacManScene extends THREE.Scene {
         // Dot
         else if (cell === ".") {
           object = this.createDot();
-          map.numDots += 1;
+          this.map.numDots += 1;
         }
         // Power pellet
-        else if (cell === "o") {
+        else if (cell === "O") {
           object = this.createPowerPellet();
         }
         // Pac Man
         else if (cell === "P") {
-          map.pacManSpawn = new THREE.Vector3(x, y, 0);
+          this.map.pacManSpwan = new THREE.Vector3(x, y, 0);
         }
         // Ghost
         else if (cell === "G") {
-          map.ghostSpawn = new THREE.Vector3(x, y, 0);
+          this.map.ghostSpawn = new THREE.Vector3(x, y, 0);
         }
 
         if (object !== null) {
           object.position.set(x, y, 0);
-          //@ts-ignore
-          map[y][x] = object;
-          // console.log((map[y][x] = object));
+          this.map[y][x] = object;
           scene.add(object);
         }
       }
     }
 
-    map.centerX = (map.left + map.right) / 2;
-    map.centerY = (map.top + map.bottom) / 2;
+    this.map.centerX = (this.map.left + this.map.right) / 2;
+    this.map.centerY = (this.map.top + this.map.bottom) / 2;
 
-    return map;
+    return this.map;
   };
 
   private getAt = (map: any[][], position: { x: number; y: number }) => {
-    const x = Math.round(position.x);
-    const y = Math.round(position.y);
+    const x = Math.floor(position.x);
+    const y = Math.floor(position.y);
 
     return map[y] && map[y][x];
   };
@@ -216,8 +254,8 @@ export default class PacManScene extends THREE.Scene {
   };
 
   private removeAt = (map: any[][], position: { x: number; y: number }) => {
-    const x = Math.round(position.x);
-    const y = Math.round(position.y);
+    const x = Math.floor(position.x);
+    const y = Math.floor(position.y);
 
     if (map[y] && map[y][x]) {
       // map[y][x].dispose();
@@ -235,7 +273,7 @@ export default class PacManScene extends THREE.Scene {
 
   private createDot = () => {
     const dotMesh = new THREE.Mesh(
-      new THREE.SphereGeometry(this.DOT_RADIUS),
+      new THREE.SphereGeometry(0.2),
       new THREE.MeshPhongMaterial({ color: "0xffdab9" })
     );
     return dotMesh;
@@ -243,7 +281,7 @@ export default class PacManScene extends THREE.Scene {
 
   private createPowerPellet = () => {
     const powerPelletMesh = new THREE.Mesh(
-      new THREE.SphereGeometry(this.PELLET_RADIUS, 12, 8),
+      new THREE.SphereGeometry(0.4),
       new THREE.MeshPhongMaterial({ color: "0xffdab9" })
     );
     return powerPelletMesh;
@@ -293,78 +331,22 @@ export default class PacManScene extends THREE.Scene {
     });
   };
 
-  private createPacMan = (scene: this, position: THREE.Vector3) => {
-    // const SphereGeometry = new THREE.SphereGeometry(this.PACMAN_RADIUS, 16, 16);
-
-    // Create spheres with decreasingly small horizontal sweeps, in order
-    // to create pacman "death" animation.
-    let pacmanGeometries = [];
-    let numFrames = 40;
-    let offset;
-    for (var i = 0; i < numFrames; i++) {
-      offset = (i / (numFrames - 1)) * Math.PI;
-      pacmanGeometries.push(
-        new THREE.SphereGeometry(
-          this.PACMAN_RADIUS,
-          16,
-          16,
-          offset,
-          Math.PI * 2 - offset * 2
-        )
-      );
-      pacmanGeometries[i].rotateX(Math.PI / 2);
-    }
-    const sphereMaterial = new THREE.MeshStandardMaterial({
-      color: 0xfeff00,
-      wireframe: false,
-      side: THREE.DoubleSide,
-    });
-    const pacMan = new THREE.Mesh(pacmanGeometries[0], sphereMaterial);
-
-    //@ts-ignore
-    pacMan.isPacman = true;
-    //@ts-ignore
-    pacMan.isWrapper = true;
-    //@ts-ignore
-    pacMan.atePellet = false;
-    //@ts-ignore
-    pacMan.distanceMoved = 0;
-
-    pacMan.receiveShadow = true;
-    pacMan.castShadow = true;
-
-    pacMan.position.copy(position);
-    //@ts-ignore
-    pacMan.direction = new THREE.Vector3(-1, 0, 0);
-
-    scene.add(pacMan);
-
-    return pacMan;
-  };
-
-  private createGhost = (scene: this, position: THREE.Vector3) => {
+  private createGhost = () => {
     // Ghost
     const ghost = new THREE.Mesh(
-      new THREE.SphereGeometry(this.GHOST_RADIUS, 16, 16),
+      new THREE.SphereGeometry(1, 50, 50),
       new THREE.MeshPhongMaterial({ color: 0xff0000 })
     );
     ghost.matrixAutoUpdate = false;
+    this.add(ghost);
 
     ghost.castShadow = true;
-    //@ts-ignore
-    ghost.isGhost = true;
-    //@ts-ignore
-    ghost.isWrapper = true;
-    //@ts-ignore
-    ghost.isAfraid = false;
 
-    ghost.position.copy(position);
-    //@ts-ignore
-    ghost.direction = new THREE.Vector3(-1, 0, 0);
+    // Bounding box
+    let ghostBB = new THREE.Sphere(ghost.position, 1);
+    console.log(ghostBB);
 
-    scene.add(ghost);
-
-    return ghost;
+    return { ghost, ghostBB };
   };
 
   private wrapObject = (
@@ -387,86 +369,8 @@ export default class PacManScene extends THREE.Scene {
     };
   };
 
-  private createKeyState = () => {
-    let keyState: any = {};
-
-    document.body.addEventListener("keydown", (e) => {
-      keyState[e.key] = true;
-    });
-
-    document.body.addEventListener("keyup", (e) => {
-      keyState[e.key] = false;
-    });
-
-    document.body.addEventListener("blur", (e) => {
-      // Keys become unpressed when window loses focus
-      for (let key in keyState) {
-        if (keyState.hasOwnProperty(key)) keyState[key] = false;
-      }
-    });
-
-    console.log(keyState);
-
-    return keyState;
-  };
-
-  private movePacMan = (delta: number, keys: any) => {
-    // Let PacMan face the right way when he moves
-    const _lookAt = new THREE.Vector3();
-
-    // Movevement of PacMan
-    this.pacMan?.up
-      .copy(this.pacMan.direction)
-      .applyAxisAngle(this.UP, -Math.PI / 2);
-    this.pacMan?.lookAt(_lookAt.copy(this.pacMan.position).add(this.UP));
-
-    document.onkeydown = (e) => {
-      // Z - move forward
-      if (keys["z"]) {
-        this.pacMan.translateOnAxis(this.LEFT, this.PACMAN_SPEED * delta);
-        this.pacMan.distanceMoved += this.PACMAN_SPEED * delta;
-      }
-      // S - move backward
-      if (keys["s"]) {
-        this.pacMan.translateOnAxis(this.LEFT, -this.PACMAN_SPEED * delta);
-        this.pacMan.distanceMoved += this.PACMAN_SPEED * delta;
-      }
-      // Q - rotate left
-      if (keys["q"]) {
-        this.pacMan.direction.applyAxisAngle(this.UP, (Math.PI / 2) * delta);
-      }
-      // D - rotate right
-      if (keys["d"]) {
-        this.pacMan.direction.applyAxisAngle(this.UP, (-Math.PI / 2) * delta);
-      }
-    };
-
-    // Check collisions with walls
-    const leftSide = this.pacMan?.position
-      .clone()
-      .addScaledVector(this.LEFT, this.PACMAN_RADIUS)
-      .round();
-    const rightSide = this.pacMan?.position;
-  };
-
-  private updateGame = (delta: number) => {};
-
-  private updateCamera = (delta: number) => {
-    this.camera.position
-      .copy(this.pacMan.position)
-      .addScaledVector(this.UP, 1.5)
-      .addScaledVector(this.pacMan.direction, -1);
-    this.camera.targetLookAt
-      .copy(this.pacMan.position)
-      .add(this.pacMan.direction);
-
-    // this.camera.lookAt(this.camera.targetLookAt);
-  };
-
   update() {
     const delta = this.time.update().getDelta();
-    this.movePacMan(delta, this.keys);
-    this.updateCamera(delta);
     this.entityManager.update(delta);
   }
 }
