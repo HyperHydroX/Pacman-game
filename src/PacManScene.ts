@@ -8,12 +8,14 @@ export default class PacManScene extends THREE.Scene {
 
   private readonly time = new YUKA.Time();
   private readonly entityManager = new YUKA.EntityManager();
-
+  private directionVector = new THREE.Vector3();
   private readonly KeyDown = new Set<string>();
-  private pacMan?: THREE.Mesh;
-  private keys: any = {};
 
-  private PACMAN_SPEED = 2;
+  private pacMan?: THREE.Mesh;
+  private won: boolean = false;
+  private lost: boolean = false;
+
+  private PACMAN_SPEED = 0.05;
   private PACMAN_RADIUS = 0.25;
   private GHOST_SPEED = 1.5;
   private GHOST_RADIUS = this.PACMAN_RADIUS * 1.25;
@@ -53,7 +55,7 @@ export default class PacManScene extends THREE.Scene {
     "          # . # #                     # # . #          ",
     "          # . # #   # # #     # # #   # # . #          ",
     "# # # # # # . # #   #             #   # # . # # # # # #",
-    "            .       #     G P     #       .            ",
+    "            .       #     G       #       .            ",
     "# # # # # # . # #   #             #   # # . # # # # # #",
     "          # . # #   # # # # # # # #   # # . #          ",
     "          # . # #                     # # . #          ",
@@ -62,7 +64,7 @@ export default class PacManScene extends THREE.Scene {
     "# . . . . . . . . . . . . # # . . . . . . . . . . . . #",
     "# . # # # # . # # # # # . # # . # # # # # . # # # # . #",
     "# . # # # # . # # # # # . # # . # # # # # . # # # # . #",
-    "# o . . # # . . . . . . .     . . . . . . . # # . . o #",
+    "# o . . # # . . . . . . . P   . . . . . . . # # . . o #",
     "# # # . # # . # # . # # # # # # # # . # # . # # . # # #",
     "# # # . # # . # # . # # # # # # # # . # # . # # . # # #",
     "# . . . . . . # # . . . . # # . . . . # # . . . . . . #",
@@ -90,19 +92,24 @@ export default class PacManScene extends THREE.Scene {
 
     // Camera
     this.camera.up.copy(this.UP);
+    //@ts-ignore
     this.camera.targetPosition = new THREE.Vector3();
+    //@ts-ignore
     this.camera.targetLookAt = new THREE.Vector3();
-    this.camera.lookAt = new THREE.Vector3();
+    //@ts-ignore
+    this.camera.lookAtPosition = new THREE.Vector3();
 
-    //#region Test
-    this.keys = this.createKeyState();
     this.map = this.createMap(this, this.LEVEL);
-    let numDotsEaten = 0;
+
+    //PacMan
     this.pacMan = this.createPacMan(this, this.map.pacManSpawn);
+    this.pacMan.add(this.camera);
+    this.pacMan.rotateX(Math.PI / 2);
+
+    this.camera.position.y = 0.5;
+    this.camera.position.z = 2;
 
     const hudCamera = this.createHudCamera(this.map);
-
-    //#endregion
 
     //#region Yuka
     // const sync = (
@@ -131,9 +138,20 @@ export default class PacManScene extends THREE.Scene {
     // // const seekBehavior = new YUKA.SeekBehavior(evaderTarget);
     // // evader.steering.add(seekBehavior);
     //#endregion
+
+    document.addEventListener("keydown", this.handleKeyDown);
+    document.addEventListener("keyup", this.handleKeyUp);
   }
 
-  private createMap = (scene: any, level: any[]) => {
+  private handleKeyDown = (e: KeyboardEvent) => {
+    this.KeyDown.add(e.key.toLocaleLowerCase());
+  };
+
+  private handleKeyUp = (e: KeyboardEvent) => {
+    this.KeyDown.delete(e.key.toLocaleLowerCase());
+  };
+
+  private createMap(scene: any, level: any[]) {
     const map: any = {};
     map.bottom = -(level.length - 1);
     map.top = 0;
@@ -201,21 +219,21 @@ export default class PacManScene extends THREE.Scene {
     map.centerY = (map.top + map.bottom) / 2;
 
     return map;
-  };
+  }
 
-  private getAt = (map: any[][], position: { x: number; y: number }) => {
+  private getAt(map: any, position: any) {
     const x = Math.round(position.x);
     const y = Math.round(position.y);
 
     return map[y] && map[y][x];
-  };
+  }
 
-  private isWall = (map: any[][], position: { x: number; y: number }) => {
+  private isWall(map: any, position: any) {
     const cell = this.getAt(map, position);
     return cell && cell.isWall === true;
-  };
+  }
 
-  private removeAt = (map: any[][], position: { x: number; y: number }) => {
+  private removeAt(map: any[][], position: { x: number; y: number }) {
     const x = Math.round(position.x);
     const y = Math.round(position.y);
 
@@ -223,40 +241,42 @@ export default class PacManScene extends THREE.Scene {
       // map[y][x].dispose();
       map[y][x].visible = false;
     }
-  };
+  }
 
-  private createWall = () => {
+  private createWall() {
     const wallMesh = new THREE.Mesh(
       new THREE.BoxGeometry(1, 1, 1),
       new THREE.MeshLambertMaterial({ color: "blue" })
     );
+    //@ts-ignore
+    wallMesh.isWall = true;
     return wallMesh;
-  };
+  }
 
-  private createDot = () => {
+  private createDot() {
     const dotMesh = new THREE.Mesh(
       new THREE.SphereGeometry(this.DOT_RADIUS),
       new THREE.MeshPhongMaterial({ color: "0xffdab9" })
     );
     return dotMesh;
-  };
+  }
 
-  private createPowerPellet = () => {
+  private createPowerPellet() {
     const powerPelletMesh = new THREE.Mesh(
       new THREE.SphereGeometry(this.PELLET_RADIUS, 12, 8),
       new THREE.MeshPhongMaterial({ color: "0xffdab9" })
     );
     return powerPelletMesh;
-  };
+  }
 
-  private createHudCamera = (map: {
+  private createHudCamera(map: {
     right: any;
     left: any;
     top: any;
     bottom: any;
     centerX: number | undefined;
     centerY: number | undefined;
-  }) => {
+  }) {
     const halfWidth = (map.right = map.left) / 2;
     const halfHeight = (map.top = map.bottom) / 2;
 
@@ -272,9 +292,9 @@ export default class PacManScene extends THREE.Scene {
     hudCamera.lookAt(new THREE.Vector3(map.centerX, map.centerY, 0));
 
     return hudCamera;
-  };
+  }
 
-  private renderHud = (renderer: any, hudCamera: any, scene: any) => {
+  private renderHud(renderer: any, hudCamera: any, scene: any) {
     // Increase the size of PacMan and dots in HUD to make them easier to see.
     scene.children.forEach((object: any) => {
       if (object.isWall) object.scale.set(2.5, 2.5, 2.5);
@@ -291,9 +311,9 @@ export default class PacManScene extends THREE.Scene {
     scene.children.forEach((object: any) => {
       object.scale.set(1, 1, 1);
     });
-  };
+  }
 
-  private createPacMan = (scene: this, position: THREE.Vector3) => {
+  private createPacMan(scene: this, position: THREE.Vector3) {
     // const SphereGeometry = new THREE.SphereGeometry(this.PACMAN_RADIUS, 16, 16);
 
     // Create spheres with decreasingly small horizontal sweeps, in order
@@ -340,9 +360,9 @@ export default class PacManScene extends THREE.Scene {
     scene.add(pacMan);
 
     return pacMan;
-  };
+  }
 
-  private createGhost = (scene: this, position: THREE.Vector3) => {
+  private createGhost(scene: this, position: THREE.Vector3) {
     // Ghost
     const ghost = new THREE.Mesh(
       new THREE.SphereGeometry(this.GHOST_RADIUS, 16, 16),
@@ -365,108 +385,191 @@ export default class PacManScene extends THREE.Scene {
     scene.add(ghost);
 
     return ghost;
-  };
+  }
 
-  private wrapObject = (
+  private wrapObject(
     object: { position: { x: number; y: number } },
     map: { left: number; right: number; top: number; bottom: number }
-  ) => {
+  ) {
     if (object.position.x < map.left) object.position.x = map.right;
     else if (object.position.x > map.right) object.position.x = map.left;
 
     if (object.position.y > map.top) object.position.y = map.bottom;
     else if (object.position.y < map.bottom) object.position.y = map.top;
-  };
+  }
 
-  private distance = () => {
+  private distance() {
     const difference = new THREE.Vector3();
     return (a: any, b: any) => {
       difference.copy(a.position).sub(b.position);
 
       return difference.length();
     };
-  };
+  }
 
-  private createKeyState = () => {
-    let keyState: any = {};
+  // private movePacMan(delta: number, keys: any) {
+  //   // Let PacMan face the right way when he moves
+  //   const _lookAt = new THREE.Vector3();
 
-    document.body.addEventListener("keydown", (e) => {
-      keyState[e.key] = true;
-    });
+  //   // Movevement of PacMan
+  //   this.pacMan?.up
+  //     .copy(this.pacMan.direction)
+  //     .applyAxisAngle(this.UP, -Math.PI / 2);
+  //   this.pacMan?.lookAt(_lookAt.copy(this.pacMan.position).add(this.UP));
 
-    document.body.addEventListener("keyup", (e) => {
-      keyState[e.key] = false;
-    });
+  //   document.onkeydown = (e) => {
+  //     // Z - move forward
+  //     if (keys["z"]) {
+  //       this.pacMan.translateOnAxis(this.LEFT, this.PACMAN_SPEED * delta);
+  //       this.pacMan.distanceMoved += this.PACMAN_SPEED * delta;
+  //     }
+  //     // S - move backward
+  //     if (keys["s"]) {
+  //       this.pacMan.translateOnAxis(this.LEFT, -this.PACMAN_SPEED * delta);
+  //       this.pacMan.distanceMoved += this.PACMAN_SPEED * delta;
+  //     }
+  //     // Q - rotate left
+  //     if (keys["q"]) {
+  //       this.pacMan.direction.applyAxisAngle(this.UP, (Math.PI / 2) * delta);
+  //     }
+  //     // D - rotate right
+  //     if (keys["d"]) {
+  //       this.pacMan.direction.applyAxisAngle(this.UP, (-Math.PI / 2) * delta);
+  //     }
+  //   };
+  // }
 
-    document.body.addEventListener("blur", (e) => {
-      // Keys become unpressed when window loses focus
-      for (let key in keyState) {
-        if (keyState.hasOwnProperty(key)) keyState[key] = false;
-      }
-    });
+  private updateInput() {
+    if (!this.pacMan) return;
 
-    console.log(keyState);
+    if (this.KeyDown.has("q") || this.KeyDown.has("arrowleft")) {
+      this.pacMan?.rotateY(0.02);
+    } else if (this.KeyDown.has("d") || this.KeyDown.has("arrowright")) {
+      this.pacMan?.rotateY(-0.02);
+    }
 
-    return keyState;
-  };
+    const direction = this.directionVector;
 
-  private movePacMan = (delta: number, keys: any) => {
-    // Let PacMan face the right way when he moves
-    const _lookAt = new THREE.Vector3();
+    this.camera.getWorldDirection(direction);
 
-    // Movevement of PacMan
-    this.pacMan?.up
-      .copy(this.pacMan.direction)
-      .applyAxisAngle(this.UP, -Math.PI / 2);
-    this.pacMan?.lookAt(_lookAt.copy(this.pacMan.position).add(this.UP));
-
-    document.onkeydown = (e) => {
-      // Z - move forward
-      if (keys["z"]) {
-        this.pacMan.translateOnAxis(this.LEFT, this.PACMAN_SPEED * delta);
-        this.pacMan.distanceMoved += this.PACMAN_SPEED * delta;
-      }
-      // S - move backward
-      if (keys["s"]) {
-        this.pacMan.translateOnAxis(this.LEFT, -this.PACMAN_SPEED * delta);
-        this.pacMan.distanceMoved += this.PACMAN_SPEED * delta;
-      }
-      // Q - rotate left
-      if (keys["q"]) {
-        this.pacMan.direction.applyAxisAngle(this.UP, (Math.PI / 2) * delta);
-      }
-      // D - rotate right
-      if (keys["d"]) {
-        this.pacMan.direction.applyAxisAngle(this.UP, (-Math.PI / 2) * delta);
-      }
-    };
+    if (this.KeyDown.has("z") || this.KeyDown.has("arrowup")) {
+      this.pacMan?.position.add(direction.multiplyScalar(this.PACMAN_SPEED));
+    } else if (this.KeyDown.has("s") || this.KeyDown.has("arrowdown")) {
+      this.pacMan?.position.add(direction.multiplyScalar(-this.PACMAN_SPEED));
+    }
 
     // Check collisions with walls
-    const leftSide = this.pacMan?.position
+    const leftSide = this.pacMan.position
       .clone()
       .addScaledVector(this.LEFT, this.PACMAN_RADIUS)
       .round();
-    const rightSide = this.pacMan?.position;
-  };
+    const rightSide = this.pacMan.position
+      .clone()
+      .addScaledVector(this.RIGHT, this.PACMAN_RADIUS)
+      .round();
+    const topSide = this.pacMan.position
+      .clone()
+      .addScaledVector(this.TOP, this.PACMAN_RADIUS)
+      .round();
+    const bottomSide = this.pacMan.position
+      .clone()
+      .addScaledVector(this.BOTTOM, this.PACMAN_RADIUS)
+      .round();
 
-  private updateGame = (delta: number) => {};
+    console.log(this.pacMan.position.x);
+    console.log(this.pacMan.position.y);
 
-  private updateCamera = (delta: number) => {
-    this.camera.position
-      .copy(this.pacMan.position)
-      .addScaledVector(this.UP, 1.5)
-      .addScaledVector(this.pacMan.direction, -1);
-    this.camera.targetLookAt
-      .copy(this.pacMan.position)
-      .add(this.pacMan.direction);
+    console.log(leftSide);
+    console.log(rightSide);
+    console.log(topSide);
+    console.log(bottomSide);
 
-    // this.camera.lookAt(this.camera.targetLookAt);
+    if (this.isWall(this.map, leftSide)) {
+      this.pacMan.position.x = leftSide.x + 0.5 + this.PACMAN_RADIUS;
+    }
+    if (this.isWall(this.map, rightSide)) {
+      this.pacMan.position.x = rightSide.x - 0.5 - this.PACMAN_RADIUS;
+    }
+    if (this.isWall(this.map, topSide)) {
+      this.pacMan.position.y = topSide.y - 0.5 - this.PACMAN_RADIUS;
+    }
+    if (this.isWall(this.map, bottomSide)) {
+      this.pacMan.position.y = bottomSide.y + 0.5 + this.PACMAN_RADIUS;
+    }
+  }
+
+  // private updateCamera = (delta: number) => {
+  //   if (this.won) {
+  //     // After winning, pan camera out to show whole level.
+  //     this.camera.targetPosition.set(this.map.centerX, this.map.centerY, 30);
+  //     this.camera.targetLookAt.set(this.map.centerX, this.map.centerY, 0);
+  //   } else if (this.lost) {
+  //     // After losing, move camera to look down at pacman's body from above.
+  //     this.camera.targetPosition = this.pacMan.position
+  //       .clone()
+  //       .addScaledVector(this.UP, 4);
+  //     this.camera.targetLookAt = this.pacMan.position
+  //       .clone()
+  //       .addScaledVector(this.pacMan.direction, 0.01);
+  //   } else {
+  //     // Place camera above and behind pacman, looking towards direction of pacman.
+  //     this.camera.targetPosition
+  //       .copy(this.pacMan.position)
+  //       .addScaledVector(this.UP, 1.5)
+  //       .addScaledVector(this.pacMan.direction, -1);
+  //     this.camera.targetLookAt
+  //       .copy(this.pacMan.position)
+  //       .add(this.pacMan.direction);
+  //   }
+
+  //   // Move camera slowly during win/lose animations.
+  //   let cameraSpeed = this.lost || this.won ? 1 : 10;
+  //   this.camera.position.lerp(this.camera.targetPosition, delta * cameraSpeed);
+  //   this.camera.lookAtPosition.lerp(
+  //     this.camera.targetLookAt,
+  //     delta * cameraSpeed
+  //   );
+  //   this.camera.lookAt(this.camera.lookAtPosition);
+  // };
+
+  private animationLoop = (callback: any, requestFrameFunction: any) => {
+    requestFrameFunction = requestFrameFunction || requestAnimationFrame;
+
+    let previousFrameTime = window.performance.now();
+
+    // How many seconds the animation has progressed in total.
+    let animationSeconds = 0;
+
+    const render = function () {
+      let now = window.performance.now();
+      let animationDelta = (now - previousFrameTime) / 1000;
+      previousFrameTime = now;
+
+      // requestAnimationFrame will not call the callback if the browser
+      // isn't visible, so if the browser has lost focus for a while the
+      // time since the last frame might be very large. This could cause
+      // strange behavior (such as objects teleporting through walls in
+      // one frame when they would normally move slowly toward the wall
+      // over several frames), so make sure that the delta is never too
+      // large.
+      animationDelta = Math.min(animationDelta, 1 / 30);
+
+      // Keep track of how many seconds of animation has passed.
+      animationSeconds += animationDelta;
+
+      callback(animationDelta, animationSeconds);
+
+      requestFrameFunction(render);
+    };
+
+    requestFrameFunction(render);
   };
 
   update() {
     const delta = this.time.update().getDelta();
-    this.movePacMan(delta, this.keys);
-    this.updateCamera(delta);
+    // this.movePacMan(delta, this.keys);
+    this.updateInput();
+    // this.updateCamera(delta);
     this.entityManager.update(delta);
   }
 }
