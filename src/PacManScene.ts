@@ -10,12 +10,17 @@ export default class PacManScene extends THREE.Scene {
   private readonly entityManager = new YUKA.EntityManager();
   private directionVector = new THREE.Vector3();
   private readonly KeyDown = new Set<string>();
+  private lostTime = 0;
+  private now: number | undefined;
 
   private pacMan?: THREE.Mesh;
+  private ghost?: THREE.Mesh;
+  private numGhosts: number = 0;
+  private ghostSpawnTime: number;
   private won: boolean = false;
   private lost: boolean = false;
 
-  private PACMAN_SPEED = 0.05;
+  private PACMAN_SPEED = 0.04;
   private PACMAN_RADIUS = 0.25;
   private GHOST_SPEED = 1.5;
   private GHOST_RADIUS = this.PACMAN_RADIUS * 1.25;
@@ -90,24 +95,21 @@ export default class PacManScene extends THREE.Scene {
     this.spotLight.castShadow = true;
     this.spotLight.angle = 0.2;
 
-    // Camera
-    this.camera.up.copy(this.UP);
-    //@ts-ignore
-    this.camera.targetPosition = new THREE.Vector3();
-    //@ts-ignore
-    this.camera.targetLookAt = new THREE.Vector3();
-    //@ts-ignore
-    this.camera.lookAtPosition = new THREE.Vector3();
-
+    // Map
     this.map = this.createMap(this, this.LEVEL);
 
     //PacMan
     this.pacMan = this.createPacMan(this, this.map.pacManSpawn);
     this.pacMan.add(this.camera);
     this.pacMan.rotateX(Math.PI / 2);
+    // this.pacMan.rotation.x = Math.PI * 2;
+    this.pacMan.rotateY(Math.PI / 2);
 
-    this.camera.position.y = 0.5;
+    this.camera.position.y = 1;
     this.camera.position.z = 2;
+
+    // Ghost
+    this.ghostSpawnTime = -8;
 
     const hudCamera = this.createHudCamera(this.map);
 
@@ -316,8 +318,7 @@ export default class PacManScene extends THREE.Scene {
   private createPacMan(scene: this, position: THREE.Vector3) {
     // const SphereGeometry = new THREE.SphereGeometry(this.PACMAN_RADIUS, 16, 16);
 
-    // Create spheres with decreasingly small horizontal sweeps, in order
-    // to create pacman "death" animation.
+    // Create spheres with decreasingly small horizontal sweeps, in order to create pacman animations.
     let pacmanGeometries = [];
     let numFrames = 40;
     let offset;
@@ -336,11 +337,13 @@ export default class PacManScene extends THREE.Scene {
     }
     const sphereMaterial = new THREE.MeshStandardMaterial({
       color: 0xfeff00,
-      wireframe: false,
       side: THREE.DoubleSide,
     });
     const pacMan = new THREE.Mesh(pacmanGeometries[0], sphereMaterial);
-
+    //@ts-ignore
+    pacMan.frames = pacmanGeometries;
+    //@ts-ignore
+    pacMan.currentFrame = 0;
     //@ts-ignore
     pacMan.isPacman = true;
     //@ts-ignore
@@ -364,27 +367,24 @@ export default class PacManScene extends THREE.Scene {
 
   private createGhost(scene: this, position: THREE.Vector3) {
     // Ghost
-    const ghost = new THREE.Mesh(
+    this.ghost = new THREE.Mesh(
       new THREE.SphereGeometry(this.GHOST_RADIUS, 16, 16),
       new THREE.MeshPhongMaterial({ color: 0xff0000 })
     );
-    ghost.matrixAutoUpdate = false;
-
-    ghost.castShadow = true;
+    // ghost.matrixAutoUpdate = false;
+    this.ghost.castShadow = true;
     //@ts-ignore
-    ghost.isGhost = true;
+    this.ghost.isGhost = true;
     //@ts-ignore
-    ghost.isWrapper = true;
+    this.ghost.isWrapper = true;
     //@ts-ignore
-    ghost.isAfraid = false;
+    this.ghost.isAfraid = false;
 
-    ghost.position.copy(position);
+    this.ghost.position.copy(position);
     //@ts-ignore
-    ghost.direction = new THREE.Vector3(-1, 0, 0);
+    this.ghost.direction = new THREE.Vector3(-1, 0, 0);
 
-    scene.add(ghost);
-
-    return ghost;
+    scene.add(this.ghost);
   }
 
   private wrapObject(
@@ -438,14 +438,35 @@ export default class PacManScene extends THREE.Scene {
   //     }
   //   };
   // }
+  private animatePacman() {
+    if (this.lost) {
+      // If pacman got eaten, show dying animation.
+      let angle = ((this.now - this.lostTime) * Math.PI) / 2;
+      let frame = Math.min(
+        this.pacMan.frames.length - 1,
+        Math.floor((angle / Math.PI) * this.pacMan.frames.length)
+      );
+
+      this.pacMan.geometry = this.pacMan.frames[frame];
+    } else {
+      // If pacman is alive, show eating animation.
+      const maxAngle = Math.PI / 4;
+      // console.log(this.pacMan.distanceMoved);
+      let angle = (this.pacMan.distanceMoved * 2) % (maxAngle * 2);
+      if (angle > maxAngle) angle = maxAngle * 2 - angle;
+      const frame = Math.floor((angle / Math.PI) * this.pacMan.frames.length);
+
+      this.pacMan.geometry = this.pacMan.frames[frame];
+    }
+  }
 
   private updateInput() {
     if (!this.pacMan) return;
 
     if (this.KeyDown.has("q") || this.KeyDown.has("arrowleft")) {
-      this.pacMan?.rotateY(0.02);
+      this.pacMan?.rotateY(0.03);
     } else if (this.KeyDown.has("d") || this.KeyDown.has("arrowright")) {
-      this.pacMan?.rotateY(-0.02);
+      this.pacMan?.rotateY(-0.03);
     }
 
     const direction = this.directionVector;
@@ -454,11 +475,15 @@ export default class PacManScene extends THREE.Scene {
 
     if (this.KeyDown.has("z") || this.KeyDown.has("arrowup")) {
       this.pacMan?.position.add(direction.multiplyScalar(this.PACMAN_SPEED));
+      this.pacMan.distanceMoved += this.PACMAN_SPEED * 0.55;
     } else if (this.KeyDown.has("s") || this.KeyDown.has("arrowdown")) {
       this.pacMan?.position.add(direction.multiplyScalar(-this.PACMAN_SPEED));
+      this.pacMan.distanceMoved += this.PACMAN_SPEED * 0.55;
     }
 
     // Check collisions with walls
+
+    // Create an invisible box around PacMan
     const leftSide = this.pacMan.position
       .clone()
       .addScaledVector(this.LEFT, this.PACMAN_RADIUS)
@@ -476,14 +501,15 @@ export default class PacManScene extends THREE.Scene {
       .addScaledVector(this.BOTTOM, this.PACMAN_RADIUS)
       .round();
 
-    console.log(this.pacMan.position.x);
-    console.log(this.pacMan.position.y);
+    // console.log(this.pacMan.position.x);
+    // console.log(this.pacMan.position.y);
 
-    console.log(leftSide);
-    console.log(rightSide);
-    console.log(topSide);
-    console.log(bottomSide);
+    // console.log(leftSide);
+    // console.log(rightSide);
+    // console.log(topSide);
+    // console.log(bottomSide);
 
+    // Check the box collision with the walls
     if (this.isWall(this.map, leftSide)) {
       this.pacMan.position.x = leftSide.x + 0.5 + this.PACMAN_RADIUS;
     }
@@ -495,6 +521,67 @@ export default class PacManScene extends THREE.Scene {
     }
     if (this.isWall(this.map, bottomSide)) {
       this.pacMan.position.y = bottomSide.y + 0.5 + this.PACMAN_RADIUS;
+    }
+  }
+
+  private updateGhost(ghost: any, delta: any, now: number) {
+    this.moveGhost(ghost, delta);
+  }
+
+  private moveGhost(ghost: any, delta: any) {
+    const previousPosition = new THREE.Vector3();
+    const currentPosition = new THREE.Vector3();
+    const leftTurn = new THREE.Vector3();
+    const rightTurn = new THREE.Vector3();
+
+    previousPosition
+      .copy(ghost.position)
+      .addScaledVector(ghost.direction, 0.5)
+      .round();
+
+    ghost.translateOnAxis(ghost.direction, delta, this.GHOST_SPEED);
+    currentPosition
+      .copy(ghost.position)
+      .addScaledVector(ghost.direction, 0.5)
+      .round();
+
+    // If the ghost is on a corner, check if it can turn
+    if (!currentPosition.equals(previousPosition)) {
+      leftTurn.copy(ghost.direction).applyAxisAngle(this.UP, Math.PI / 2);
+      rightTurn.copy(ghost.direction).applyAxisAngle(this.UP, -Math.PI / 2);
+
+      const forwardWall = this.isWall(this.map, currentPosition);
+      const leftWall = this.isWall(
+        this.map,
+        currentPosition.copy(ghost.position).add(leftTurn)
+      );
+      const rightWall = this.isWall(
+        this.map,
+        currentPosition.copy(ghost.position).add(rightTurn)
+      );
+
+      if (!leftWall || !rightWall) {
+        let possibleTurns = [];
+        if (!forwardWall) possibleTurns.push(ghost.direction);
+        if (!leftWall) possibleTurns.push(leftTurn);
+        if (!rightWall) possibleTurns.push(rightTurn);
+
+        if (possibleTurns.length === 0) {
+          throw new Error("A ghost got stuck!");
+        }
+
+        // console.log(possibleTurns.length);
+
+        let newDirection =
+          possibleTurns[Math.floor(Math.random() * possibleTurns.length)];
+
+        // console.log(newDirection);
+
+        ghost.direction.copy(newDirection);
+
+        // Snap ghost to center of current cell and start moving in new direction.
+        ghost.position.round().addScaledVector(ghost.direction, delta);
+      }
     }
   }
 
@@ -532,44 +619,23 @@ export default class PacManScene extends THREE.Scene {
   //   this.camera.lookAt(this.camera.lookAtPosition);
   // };
 
-  private animationLoop = (callback: any, requestFrameFunction: any) => {
-    requestFrameFunction = requestFrameFunction || requestAnimationFrame;
-
-    let previousFrameTime = window.performance.now();
-
-    // How many seconds the animation has progressed in total.
-    let animationSeconds = 0;
-
-    const render = function () {
-      let now = window.performance.now();
-      let animationDelta = (now - previousFrameTime) / 1000;
-      previousFrameTime = now;
-
-      // requestAnimationFrame will not call the callback if the browser
-      // isn't visible, so if the browser has lost focus for a while the
-      // time since the last frame might be very large. This could cause
-      // strange behavior (such as objects teleporting through walls in
-      // one frame when they would normally move slowly toward the wall
-      // over several frames), so make sure that the delta is never too
-      // large.
-      animationDelta = Math.min(animationDelta, 1 / 30);
-
-      // Keep track of how many seconds of animation has passed.
-      animationSeconds += animationDelta;
-
-      callback(animationDelta, animationSeconds);
-
-      requestFrameFunction(render);
-    };
-
-    requestFrameFunction(render);
-  };
-
   update() {
+    this.now = window.performance.now() / 1000;
     const delta = this.time.update().getDelta();
-    // this.movePacMan(delta, this.keys);
     this.updateInput();
-    // this.updateCamera(delta);
+    this.animatePacman();
     this.entityManager.update(delta);
+
+    console.log(this.now);
+    if (this.numGhosts < 4 && this.now - this.ghostSpawnTime > 8) {
+      console.log(this.map.ghostSpawn);
+      this.createGhost(this, this.map.ghostSpawn);
+      this.numGhosts += 1;
+      this.ghostSpawnTime = this.now;
+    }
+
+    this.children.forEach((child) => {
+      if (child.isGhost) this.updateGhost(child, delta, this.now);
+    });
   }
 }

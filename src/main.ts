@@ -14,13 +14,13 @@ const renderer = new THREE.WebGLRenderer({
 renderer.setSize(width, height);
 renderer.setClearColor(0x000000, 1.0);
 
-const camera = new THREE.PerspectiveCamera(65, width / height, 0.1, 1000);
+const mainCamera = new THREE.PerspectiveCamera(65, width / height, 0.1, 100);
 // camera.position.set(-10, 10, 30);
 
 // const orbitControls = new OrbitControls(camera, renderer.domElement);
 // orbitControls.update();
 
-const scene = new PacManScene(camera);
+const scene = new PacManScene(mainCamera);
 scene.initialize();
 
 const stats = new Stats();
@@ -30,7 +30,7 @@ document.body.appendChild(stats.dom);
 const animate = () => {
   stats.begin();
   scene.update();
-  renderer.render(scene, camera);
+  renderer.render(scene, mainCamera);
   stats.end();
   requestAnimationFrame(animate);
 };
@@ -39,7 +39,7 @@ requestAnimationFrame(animate);
 
 // Make the canvas responsive
 window.addEventListener("resize", () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
+  mainCamera.aspect = window.innerWidth / window.innerHeight;
+  mainCamera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
