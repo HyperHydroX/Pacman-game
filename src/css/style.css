@@ -4,6 +4,7 @@ body {
 
   /* Make sure canvas fills screen */
   margin: 0;
+  padding: 0;
   min-height: 100vh;
 
   /* Prevent scrollbars */
@@ -19,6 +20,13 @@ body {
 #foodAmount {
   position: absolute;
   top: 5rem;
+  right: 2rem;
+  color: white;
+  font-size: 1.5rem;
+}
+#afraidTimer {
+  position: absolute;
+  top: 8rem;
   right: 2rem;
   color: white;
   font-size: 1.5rem;

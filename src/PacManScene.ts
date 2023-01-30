@@ -101,6 +101,10 @@ export default class PacManScene extends THREE.Scene {
   }
 
   async initialize() {
+    // Level start sound
+    this.levelStartSound.preload = "auto";
+    this.levelStartSound.autoplay = true;
+
     // Lighting
     const light = new THREE.AmbientLight(0xffffff, 0.5);
     this.add(light);
@@ -150,10 +154,6 @@ export default class PacManScene extends THREE.Scene {
 
       this.livesContainer?.appendChild(life);
     }
-
-    // Level start sound
-    this.levelStartSound.preload = "auto";
-    this.levelStartSound.autoplay = true;
 
     //#region Yuka
     // const sync = (
@@ -343,11 +343,11 @@ export default class PacManScene extends THREE.Scene {
     });
 
     // Only render in the bottom left 200x200 square of the screen.
-    renderer.setScissorTest(true);
+    renderer.setScissor(true);
     renderer.setScissor(10, 10, 200, 200);
     renderer.setViewport(10, 10, 200, 200);
     renderer.render(scene, hudCamera);
-    renderer.setScissorTest(false);
+    renderer.setScissor(false);
 
     // Reset scales after rendering HUD.
     scene.children.forEach(function (child: any) {
@@ -472,36 +472,6 @@ export default class PacManScene extends THREE.Scene {
     this.add(text);
 
     return text;
-  }
-
-  private movePacMan(delta: number, keys: any) {
-    // Let PacMan face the right way when he moves
-    const _lookAt = new THREE.Vector3();
-
-    // Movevement of PacMan
-    this.pacMan?.up
-      .copy(this.pacMan.direction)
-      .applyAxisAngle(this.UP, -Math.PI / 2);
-    this.pacMan?.lookAt(_lookAt.copy(this.pacMan.position).add(this.UP));
-
-    // Z - move forward
-    if (this.KeyDown.has("z") || this.KeyDown.has("arrowup")) {
-      this.pacMan.translateOnAxis(this.LEFT, this.PACMAN_SPEED * delta);
-      this.pacMan.distanceMoved += this.PACMAN_SPEED * delta;
-    }
-    // S - move backward
-    if (this.KeyDown.has("s") || this.KeyDown.has("arrowdown")) {
-      this.pacMan.translateOnAxis(this.LEFT, -this.PACMAN_SPEED * delta);
-      this.pacMan.distanceMoved += this.PACMAN_SPEED * delta;
-    }
-    // Q - rotate left
-    if (this.KeyDown.has("q") || this.KeyDown.has("arrowleft")) {
-      this.pacMan.direction.applyAxisAngle(this.UP, (Math.PI / 2) * delta);
-    }
-    // D - rotate right
-    if (this.KeyDown.has("d") || this.KeyDown.has("arrowright")) {
-      this.pacMan.direction.applyAxisAngle(this.UP, (-Math.PI / 2) * delta);
-    }
   }
 
   private animatePacman() {
@@ -694,6 +664,8 @@ export default class PacManScene extends THREE.Scene {
     if (this.pacMan.atePellet) {
       ghost.isAfraid = true;
       ghost.afraidTime = now;
+      // document.getElementById("afraidTimer").textContent =
+      //   ghost.afraidTime.toString();
 
       ghost.material.color.setStyle("#ffffff");
     }
@@ -840,6 +812,7 @@ export default class PacManScene extends THREE.Scene {
     this.updateCamera(delta);
     this.updateFood();
     this.animatePacman();
+    // Map Doesn't work like it would
     // this.renderHud(this.renderer, this.hudCamera, this);
     this.entityManager.update(delta);
 
