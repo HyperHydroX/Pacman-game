@@ -28,7 +28,7 @@ export default class PacManScene extends THREE.Scene {
   private numDotsEaten: number = 0;
   private livesContainer: any;
 
-  private PACMAN_SPEED = 0.04;
+  private PACMAN_SPEED = 2;
   private PACMAN_RADIUS = 0.25;
   private GHOST_SPEED = 1.5;
   private GHOST_RADIUS = this.PACMAN_RADIUS * 1.25;
@@ -114,17 +114,26 @@ export default class PacManScene extends THREE.Scene {
     // Map
     this.map = this.createMap(this, this.LEVEL);
 
+    // Camera
+    this.camera.up.copy(this.UP);
+    //@ts-ignore
+    this.camera.targetPosition = new THREE.Vector3();
+    //@ts-ignore
+    this.camera.targetLookAt = new THREE.Vector3();
+    //@ts-ignore
+    this.camera.lookAtPosition = new THREE.Vector3();
+
     //PacMan
     this.pacMan = this.createPacMan(this, this.map.pacManSpawn);
-    this.pacMan.add(this.camera);
+    // this.pacMan.add(this.camera);
 
-    this.pacMan.rotateX(Math.PI / 2);
-    this.pacMan.direction.set(this.LEFT);
-    // this.pacMan.rotation.x = Math.PI * 2;
-    this.pacMan.rotateY(Math.PI / 2);
+    // this.pacMan.rotateX(Math.PI / 2);
+    // this.pacMan.direction.set(this.LEFT);
+    // // this.pacMan.rotation.x = Math.PI * 2;
+    // this.pacMan.rotateY(Math.PI / 2);
 
-    this.camera.position.y = 1;
-    this.camera.position.z = 2;
+    // this.camera.position.y = 1;
+    // this.camera.position.z = 2;
 
     // Ghost
     this.ghostSpawnTime = -8;
@@ -389,7 +398,7 @@ export default class PacManScene extends THREE.Scene {
 
     pacMan.position.copy(position);
     //@ts-ignore
-    pacMan.direction = this.LEFT;
+    pacMan.direction = new THREE.Vector3(-1, 0, 0);
 
     scene.add(pacMan);
 
@@ -465,37 +474,35 @@ export default class PacManScene extends THREE.Scene {
     return text;
   }
 
-  // private movePacMan(delta: number, keys: any) {
-  //   // Let PacMan face the right way when he moves
-  //   const _lookAt = new THREE.Vector3();
+  private movePacMan(delta: number, keys: any) {
+    // Let PacMan face the right way when he moves
+    const _lookAt = new THREE.Vector3();
 
-  //   // Movevement of PacMan
-  //   this.pacMan?.up
-  //     .copy(this.pacMan.direction)
-  //     .applyAxisAngle(this.UP, -Math.PI / 2);
-  //   this.pacMan?.lookAt(_lookAt.copy(this.pacMan.position).add(this.UP));
+    // Movevement of PacMan
+    this.pacMan?.up
+      .copy(this.pacMan.direction)
+      .applyAxisAngle(this.UP, -Math.PI / 2);
+    this.pacMan?.lookAt(_lookAt.copy(this.pacMan.position).add(this.UP));
 
-  //   document.onkeydown = (e) => {
-  //     // Z - move forward
-  //     if (keys["z"]) {
-  //       this.pacMan.translateOnAxis(this.LEFT, this.PACMAN_SPEED * delta);
-  //       this.pacMan.distanceMoved += this.PACMAN_SPEED * delta;
-  //     }
-  //     // S - move backward
-  //     if (keys["s"]) {
-  //       this.pacMan.translateOnAxis(this.LEFT, -this.PACMAN_SPEED * delta);
-  //       this.pacMan.distanceMoved += this.PACMAN_SPEED * delta;
-  //     }
-  //     // Q - rotate left
-  //     if (keys["q"]) {
-  //       this.pacMan.direction.applyAxisAngle(this.UP, (Math.PI / 2) * delta);
-  //     }
-  //     // D - rotate right
-  //     if (keys["d"]) {
-  //       this.pacMan.direction.applyAxisAngle(this.UP, (-Math.PI / 2) * delta);
-  //     }
-  //   };
-  // }
+    // Z - move forward
+    if (this.KeyDown.has("z") || this.KeyDown.has("arrowup")) {
+      this.pacMan.translateOnAxis(this.LEFT, this.PACMAN_SPEED * delta);
+      this.pacMan.distanceMoved += this.PACMAN_SPEED * delta;
+    }
+    // S - move backward
+    if (this.KeyDown.has("s") || this.KeyDown.has("arrowdown")) {
+      this.pacMan.translateOnAxis(this.LEFT, -this.PACMAN_SPEED * delta);
+      this.pacMan.distanceMoved += this.PACMAN_SPEED * delta;
+    }
+    // Q - rotate left
+    if (this.KeyDown.has("q") || this.KeyDown.has("arrowleft")) {
+      this.pacMan.direction.applyAxisAngle(this.UP, (Math.PI / 2) * delta);
+    }
+    // D - rotate right
+    if (this.KeyDown.has("d") || this.KeyDown.has("arrowright")) {
+      this.pacMan.direction.applyAxisAngle(this.UP, (-Math.PI / 2) * delta);
+    }
+  }
 
   private animatePacman() {
     if (this.lost) {
@@ -519,26 +526,53 @@ export default class PacManScene extends THREE.Scene {
     }
   }
 
-  private updateInput() {
-    if (!this.pacMan) return;
+  private updateInput(delta: any) {
+    // if (this.KeyDown.has("q") || this.KeyDown.has("arrowleft")) {
+    //   this.pacMan?.rotateY(0.03);
+    // } else if (this.KeyDown.has("d") || this.KeyDown.has("arrowright")) {
+    //   this.pacMan?.rotateY(-0.03);
+    // }
 
-    if (this.KeyDown.has("q") || this.KeyDown.has("arrowleft")) {
-      this.pacMan?.rotateY(0.03);
-    } else if (this.KeyDown.has("d") || this.KeyDown.has("arrowright")) {
-      this.pacMan?.rotateY(-0.03);
-    }
+    // const direction = this.directionVector;
 
-    const direction = this.directionVector;
+    // this.camera.getWorldDirection(direction);
 
-    this.camera.getWorldDirection(direction);
+    // if (this.KeyDown.has("z") || this.KeyDown.has("arrowup")) {
+    //   this.pacMan?.position.add(direction.multiplyScalar(this.PACMAN_SPEED));
+    //   this.pacMan.distanceMoved += this.PACMAN_SPEED * 0.55;
+    // } else if (this.KeyDown.has("s") || this.KeyDown.has("arrowdown")) {
+    //   this.pacMan?.position.add(direction.multiplyScalar(-this.PACMAN_SPEED));
+    //   this.pacMan.distanceMoved += this.PACMAN_SPEED * 0.55;
+    //   this.chompSound.play();
+    // }
 
+    // Let PacMan face the right way when he moves
+    const _lookAt = new THREE.Vector3();
+
+    // Movevement of PacMan
+    // Update rotation based on direction so that the mouth of PacMan is awlays facing forward
+    this.pacMan?.up
+      .copy(this.pacMan.direction)
+      .applyAxisAngle(this.UP, -Math.PI / 2);
+    this.pacMan?.lookAt(_lookAt.copy(this.pacMan.position).add(this.UP));
+
+    // Z - move forward
     if (this.KeyDown.has("z") || this.KeyDown.has("arrowup")) {
-      this.pacMan?.position.add(direction.multiplyScalar(this.PACMAN_SPEED));
-      this.pacMan.distanceMoved += this.PACMAN_SPEED * 0.55;
-    } else if (this.KeyDown.has("s") || this.KeyDown.has("arrowdown")) {
-      this.pacMan?.position.add(direction.multiplyScalar(-this.PACMAN_SPEED));
-      this.pacMan.distanceMoved += this.PACMAN_SPEED * 0.55;
-      this.chompSound.play();
+      this.pacMan.translateOnAxis(this.LEFT, this.PACMAN_SPEED * delta);
+      this.pacMan.distanceMoved += this.PACMAN_SPEED * delta;
+    }
+    // S - move backward
+    if (this.KeyDown.has("s") || this.KeyDown.has("arrowdown")) {
+      this.pacMan.translateOnAxis(this.LEFT, -this.PACMAN_SPEED * delta);
+      this.pacMan.distanceMoved += this.PACMAN_SPEED * delta;
+    }
+    // Q - rotate left
+    if (this.KeyDown.has("q") || this.KeyDown.has("arrowleft")) {
+      this.pacMan.direction.applyAxisAngle(this.UP, (Math.PI / 2) * delta);
+    }
+    // D - rotate right
+    if (this.KeyDown.has("d") || this.KeyDown.has("arrowright")) {
+      this.pacMan.direction.applyAxisAngle(this.UP, (-Math.PI / 2) * delta);
     }
 
     // Only play sound while moving
@@ -759,49 +793,51 @@ export default class PacManScene extends THREE.Scene {
     }
   }
 
-  // private updateCamera = (delta: number) => {
-  //   if (this.won) {
-  //     // After winning, pan camera out to show whole level.
-  //     this.camera.targetPosition.set(this.map.centerX, this.map.centerY, 30);
-  //     this.camera.targetLookAt.set(this.map.centerX, this.map.centerY, 0);
-  //   } else if (this.lost) {
-  //     // After losing, move camera to look down at pacman's body from above.
-  //     this.camera.targetPosition = this.pacMan.position
-  //       .clone()
-  //       .addScaledVector(this.UP, 4);
-  //     this.camera.targetLookAt = this.pacMan.position
-  //       .clone()
-  //       .addScaledVector(this.pacMan.direction, 0.01);
-  //   } else {
-  //     // Place camera above and behind pacman, looking towards direction of pacman.
-  //     this.camera.targetPosition
-  //       .copy(this.pacMan.position)
-  //       .addScaledVector(this.UP, 1.5)
-  //       .addScaledVector(this.pacMan.direction, -1);
-  //     this.camera.targetLookAt
-  //       .copy(this.pacMan.position)
-  //       .add(this.pacMan.direction);
-  //   }
+  private updateCamera = (delta: number) => {
+    if (this.won) {
+      // After winning, pan camera out to show whole level.
+      this.camera.targetPosition.set(this.map.centerX, this.map.centerY, 30);
+      this.camera.targetLookAt.set(this.map.centerX, this.map.centerY, 0);
+    } else if (this.lost) {
+      // After losing, move camera to look down at pacman's body from above.
+      this.camera.targetPosition = this.pacMan.position
+        .clone()
+        .addScaledVector(this.UP, 4);
+      this.camera.targetLookAt = this.pacMan.position
+        .clone()
+        .addScaledVector(this.pacMan.direction, 0.01);
+    } else {
+      // Place camera above and behind pacman, looking towards direction of pacman.
+      this.camera.targetPosition
+        .copy(this.pacMan.position)
+        .addScaledVector(this.UP, 1.5)
+        .addScaledVector(this.pacMan.direction, -1);
+      this.camera.targetLookAt
+        .copy(this.pacMan.position)
+        .add(this.pacMan.direction);
+    }
 
-  //   // Move camera slowly during win/lose animations.
-  //   let cameraSpeed = this.lost || this.won ? 1 : 10;
-  //   this.camera.position.lerp(this.camera.targetPosition, delta * cameraSpeed);
-  //   this.camera.lookAtPosition.lerp(
-  //     this.camera.targetLookAt,
-  //     delta * cameraSpeed
-  //   );
-  //   this.camera.lookAt(this.camera.lookAtPosition);
-  // };
+    // Move camera slowly during win/lose animations.
+    let cameraSpeed = this.lost || this.won ? 1 : 10;
+    this.camera.position.lerp(this.camera.targetPosition, delta * cameraSpeed);
+    this.camera.lookAtPosition.lerp(
+      this.camera.targetLookAt,
+      delta * cameraSpeed
+    );
+    this.camera.lookAt(this.camera.lookAtPosition);
+  };
 
   private updateFood() {
-    document.getElementById("foodAmount").textContent =
-      this.foodAmount.toString();
+    document.getElementById(
+      "foodAmount"
+    ).textContent = `Food left: ${this.foodAmount.toString()}`;
   }
 
   update() {
     this.now = window.performance.now() / 1000;
     const delta = this.time.update().getDelta();
-    this.updateInput();
+    this.updateInput(delta);
+    this.updateCamera(delta);
     this.updateFood();
     this.animatePacman();
     // this.renderHud(this.renderer, this.hudCamera, this);

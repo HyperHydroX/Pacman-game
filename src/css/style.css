@@ -19,8 +19,9 @@ body {
 #foodAmount {
   position: absolute;
   top: 5rem;
-  right: 1rem;
+  right: 2rem;
   color: white;
+  font-size: 1.5rem;
 }
 
 .life {
