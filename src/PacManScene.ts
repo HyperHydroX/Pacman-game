@@ -3,6 +3,7 @@ import * as YUKA from "yuka";
 
 export default class PacManScene extends THREE.Scene {
   private readonly camera: THREE.PerspectiveCamera;
+  private readonly renderer: THREE.WebGLRenderer;
 
   private spotLight?: THREE.SpotLight;
 
@@ -10,15 +11,22 @@ export default class PacManScene extends THREE.Scene {
   private readonly entityManager = new YUKA.EntityManager();
   private directionVector = new THREE.Vector3();
   private readonly KeyDown = new Set<string>();
-  private lostTime = 0;
   private now: number | undefined;
+  private hudCamera: any;
 
   private pacMan?: THREE.Mesh;
   private ghost?: THREE.Mesh;
   private numGhosts: number = 0;
-  private ghostSpawnTime: number;
+  private lives: number = 0;
+  private foodAmount: number = 0;
+  private ghostSpawnTime: number | undefined;
   private won: boolean = false;
   private lost: boolean = false;
+  private wonTime: number | undefined;
+  private lostTime: number | undefined;
+  private removeItems: any = [];
+  private numDotsEaten: number = 0;
+  private livesContainer: any;
 
   private PACMAN_SPEED = 0.04;
   private PACMAN_RADIUS = 0.25;
@@ -26,6 +34,13 @@ export default class PacManScene extends THREE.Scene {
   private GHOST_RADIUS = this.PACMAN_RADIUS * 1.25;
   private DOT_RADIUS = 0.05;
   private PELLET_RADIUS = this.DOT_RADIUS * 2;
+
+  private readonly chompSound = new Audio("assets/sounds/pacman_chomp.mp3");
+  private readonly levelStartSound = new Audio(
+    "assets/sounds/pacman_beginning.mp3"
+  );
+  private readonly deathSound = new Audio("assets/sounds/pacman_death.mp3");
+  private readonly killSound = new Audio("assets/sounds/pacman_eatghost.mp3");
 
   private readonly UP = new THREE.Vector3(0, 0, 1);
   private readonly LEFT = new THREE.Vector3(-1, 0, 0);
@@ -60,7 +75,7 @@ export default class PacManScene extends THREE.Scene {
     "          # . # #                     # # . #          ",
     "          # . # #   # # #     # # #   # # . #          ",
     "# # # # # # . # #   #             #   # # . # # # # # #",
-    "            .       #     G       #       .            ",
+    "#           .       #     G       #       .           #",
     "# # # # # # . # #   #             #   # # . # # # # # #",
     "          # . # #   # # # # # # # #   # # . #          ",
     "          # . # #                     # # . #          ",
@@ -79,9 +94,10 @@ export default class PacManScene extends THREE.Scene {
     "# # # # # # # # # # # # # # # # # # # # # # # # # # # #",
   ];
 
-  constructor(camera: THREE.PerspectiveCamera) {
+  constructor(camera: THREE.PerspectiveCamera, renderer: THREE.WebGLRenderer) {
     super();
     this.camera = camera;
+    this.renderer = renderer;
   }
 
   async initialize() {
@@ -101,7 +117,9 @@ export default class PacManScene extends THREE.Scene {
     //PacMan
     this.pacMan = this.createPacMan(this, this.map.pacManSpawn);
     this.pacMan.add(this.camera);
+
     this.pacMan.rotateX(Math.PI / 2);
+    this.pacMan.direction.set(this.LEFT);
     // this.pacMan.rotation.x = Math.PI * 2;
     this.pacMan.rotateY(Math.PI / 2);
 
@@ -111,7 +129,22 @@ export default class PacManScene extends THREE.Scene {
     // Ghost
     this.ghostSpawnTime = -8;
 
-    const hudCamera = this.createHudCamera(this.map);
+    this.hudCamera = this.createHudCamera(this.map);
+
+    // Lives
+    this.lives = 3;
+    this.livesContainer = document.getElementById("lives");
+    for (let i = 0; i < this.lives; i++) {
+      const life = document.createElement("img");
+      life.src = "assets/img/pacman.png";
+      life.className = "life";
+
+      this.livesContainer?.appendChild(life);
+    }
+
+    // Level start sound
+    this.levelStartSound.preload = "auto";
+    this.levelStartSound.autoplay = true;
 
     //#region Yuka
     // const sync = (
@@ -235,7 +268,7 @@ export default class PacManScene extends THREE.Scene {
     return cell && cell.isWall === true;
   }
 
-  private removeAt(map: any[][], position: { x: number; y: number }) {
+  private removeAt(map: any, position: any) {
     const x = Math.round(position.x);
     const y = Math.round(position.y);
 
@@ -260,6 +293,9 @@ export default class PacManScene extends THREE.Scene {
       new THREE.SphereGeometry(this.DOT_RADIUS),
       new THREE.MeshPhongMaterial({ color: "0xffdab9" })
     );
+    //@ts-ignorez
+    dotMesh.isDot = true;
+    this.foodAmount++;
     return dotMesh;
   }
 
@@ -268,17 +304,12 @@ export default class PacManScene extends THREE.Scene {
       new THREE.SphereGeometry(this.PELLET_RADIUS, 12, 8),
       new THREE.MeshPhongMaterial({ color: "0xffdab9" })
     );
+    //@ts-ignore
+    powerPelletMesh.isPowerPellet = true;
     return powerPelletMesh;
   }
 
-  private createHudCamera(map: {
-    right: any;
-    left: any;
-    top: any;
-    bottom: any;
-    centerX: number | undefined;
-    centerY: number | undefined;
-  }) {
+  private createHudCamera(map: any) {
     const halfWidth = (map.right = map.left) / 2;
     const halfHeight = (map.top = map.bottom) / 2;
 
@@ -298,20 +329,20 @@ export default class PacManScene extends THREE.Scene {
 
   private renderHud(renderer: any, hudCamera: any, scene: any) {
     // Increase the size of PacMan and dots in HUD to make them easier to see.
-    scene.children.forEach((object: any) => {
-      if (object.isWall) object.scale.set(2.5, 2.5, 2.5);
+    scene.children.forEach(function (child: any) {
+      if (child.isWall !== true) child.scale.set(2.5, 2.5, 2.5);
     });
 
-    // Only render in the bottom left 200x200px
-    renderer.enableScissorTest(true);
+    // Only render in the bottom left 200x200 square of the screen.
+    renderer.setScissorTest(true);
     renderer.setScissor(10, 10, 200, 200);
     renderer.setViewport(10, 10, 200, 200);
     renderer.render(scene, hudCamera);
-    renderer.enableScissorTest(false);
+    renderer.setScissorTest(false);
 
-    // Reset scales after rendering HUD
-    scene.children.forEach((object: any) => {
-      object.scale.set(1, 1, 1);
+    // Reset scales after rendering HUD.
+    scene.children.forEach(function (child: any) {
+      child.scale.set(1, 1, 1);
     });
   }
 
@@ -358,7 +389,7 @@ export default class PacManScene extends THREE.Scene {
 
     pacMan.position.copy(position);
     //@ts-ignore
-    pacMan.direction = new THREE.Vector3(-1, 0, 0);
+    pacMan.direction = this.LEFT;
 
     scene.add(pacMan);
 
@@ -369,7 +400,9 @@ export default class PacManScene extends THREE.Scene {
     // Ghost
     this.ghost = new THREE.Mesh(
       new THREE.SphereGeometry(this.GHOST_RADIUS, 16, 16),
-      new THREE.MeshPhongMaterial({ color: 0xff0000 })
+      new THREE.MeshPhongMaterial({
+        color: 0xff0000,
+      })
     );
     // ghost.matrixAutoUpdate = false;
     this.ghost.castShadow = true;
@@ -387,10 +420,7 @@ export default class PacManScene extends THREE.Scene {
     scene.add(this.ghost);
   }
 
-  private wrapObject(
-    object: { position: { x: number; y: number } },
-    map: { left: number; right: number; top: number; bottom: number }
-  ) {
+  private wrapObject(object: any, map: any) {
     if (object.position.x < map.left) object.position.x = map.right;
     else if (object.position.x > map.right) object.position.x = map.left;
 
@@ -398,13 +428,41 @@ export default class PacManScene extends THREE.Scene {
     else if (object.position.y < map.bottom) object.position.y = map.top;
   }
 
-  private distance() {
+  private distance(a: any, b: any) {
     const difference = new THREE.Vector3();
-    return (a: any, b: any) => {
-      difference.copy(a.position).sub(b.position);
 
-      return difference.length();
-    };
+    difference.copy(a.position).sub(b.position);
+    return difference.length();
+  }
+
+  private showText(message: string, size: any, now: any) {
+    const textMaterial = new THREE.MeshPhongMaterial({ color: "red" });
+
+    // Show 3D text banner.
+    const textGeometry = new THREE.TextGeometry(message, {
+      size: size,
+      height: 0.05,
+      font: "Helvetiker",
+    });
+
+    const text = new THREE.Mesh(textGeometry, textMaterial);
+
+    // Position text just above pacman.
+    text.position.copy(this.pacMan.position).add(this.UP);
+
+    // Rotate text so that it faces same direction as pacman.
+    text.up.copy(this.pacMan.direction);
+    text.lookAt(text.position.clone().add(this.UP));
+
+    // Remove after 3 seconds.
+    //@ts-ignore
+    text.isTemporary = true;
+    //@ts-ignore
+    text.removeAfter = now + 3;
+
+    this.add(text);
+
+    return text;
   }
 
   // private movePacMan(delta: number, keys: any) {
@@ -438,6 +496,7 @@ export default class PacManScene extends THREE.Scene {
   //     }
   //   };
   // }
+
   private animatePacman() {
     if (this.lost) {
       // If pacman got eaten, show dying animation.
@@ -479,6 +538,59 @@ export default class PacManScene extends THREE.Scene {
     } else if (this.KeyDown.has("s") || this.KeyDown.has("arrowdown")) {
       this.pacMan?.position.add(direction.multiplyScalar(-this.PACMAN_SPEED));
       this.pacMan.distanceMoved += this.PACMAN_SPEED * 0.55;
+      this.chompSound.play();
+    }
+
+    // Only play sound while moving
+    if (
+      (!this.won && !this.lost && this.KeyDown.has("z")) ||
+      this.KeyDown.has("arrowup") ||
+      this.KeyDown.has("s") ||
+      this.KeyDown.has("arrowdown")
+    ) {
+      this.chompSound.play();
+    } else {
+      this.chompSound.pause();
+    }
+
+    // Check for win.
+    if (!this.won && this.numDotsEaten === this.map.numDots) {
+      this.won = true;
+      this.wonTime = this.now;
+
+      // this.showText("You won =D", 1, this.now);
+
+      this.levelStartSound.play();
+    }
+
+    // Go to next level 4 seconds after winning.
+    if (this.won && this.now - this.wonTime > 3) {
+      // Reset PacMan position and direction.
+      this.pacMan.position.copy(this.map.pacManSpawn);
+      // this.pacMan.direction.copy(this.LEFT);
+      this.pacMan.distanceMoved = 0;
+
+      // Reset dots, power pellets and ghosts.
+      this.children.forEach((child) => {
+        if (child.isDot || child.isPowerPellet) child.visible = true;
+        if (child.isGhost) this.removeItems.push(child);
+      });
+
+      // Increase speed of PacMan and Ghosts
+      this.PACMAN_SPEED += 0.1;
+      this.GHOST_SPEED += 0.1;
+
+      this.won = false;
+      this.numDotsEaten = 0;
+      this.numGhosts = 0;
+    }
+
+    // Reset PacMan 4 seconds after dying.
+    if (this.lives > 0 && this.lost && this.now - this.lostTime > 3) {
+      this.lost = false;
+      this.pacMan.position.copy(this.map.pacManSpawn);
+      this.pacMan.direction.copy(this.LEFT);
+      this.pacMan.distanceMoved = 0;
     }
 
     // Check collisions with walls
@@ -522,10 +634,72 @@ export default class PacManScene extends THREE.Scene {
     if (this.isWall(this.map, bottomSide)) {
       this.pacMan.position.y = bottomSide.y + 0.5 + this.PACMAN_RADIUS;
     }
+
+    const cell = this.getAt(this.map, this.pacMan.position);
+    // console.log(cell);
+
+    // Make PacMan eat dots
+    if (cell && cell.isDot && cell.visible) {
+      this.removeAt(this.map, this.pacMan.position);
+      this.numDotsEaten++;
+      this.foodAmount--;
+    }
+
+    // Make PacMan eat power dots
+    this.pacMan.atePellet = false;
+    if (cell && cell.isPowerPellet && cell.visible) {
+      this.removeAt(this.map, this.pacMan.position);
+      this.pacMan.atePellet = true;
+
+      this.killSound.play();
+    }
   }
 
   private updateGhost(ghost: any, delta: any, now: number) {
+    // Make all ghosts afraid when PacMan eats a power pellet
+    if (this.pacMan.atePellet) {
+      ghost.isAfraid = true;
+      ghost.afraidTime = now;
+
+      ghost.material.color.setStyle("#ffffff");
+    }
+
+    // Make ghosts go back to normal after 10 seconds
+    if (ghost.isAfraid && now - ghost.afraidTime > 10) {
+      ghost.isAfraid = false;
+
+      ghost.material.color.setStyle("#ff0000");
+    }
+
     this.moveGhost(ghost, delta);
+
+    // Check for collisions with PacMan
+
+    if (
+      !this.lost &&
+      !this.won &&
+      this.distance(this.pacMan, ghost) < this.PACMAN_RADIUS + this.GHOST_RADIUS
+    ) {
+      if (ghost.isAfraid) {
+        this.removeItems.push(ghost);
+        this.numGhosts -= 1;
+
+        this.killSound.play();
+      } else {
+        this.lives -= 1;
+        // Unshow life
+        document.getElementsByClassName("life")[this.lives].style.display =
+          "none";
+
+        // if (this.lives > 0) this.showText("You died =/", 0.1, now);
+        // else this.showText("Game over =(", 0.1, now);
+
+        this.lost = true;
+        this.lostTime = now;
+
+        this.deathSound.play();
+      }
+    }
   }
 
   private moveGhost(ghost: any, delta: any) {
@@ -619,23 +793,47 @@ export default class PacManScene extends THREE.Scene {
   //   this.camera.lookAt(this.camera.lookAtPosition);
   // };
 
+  private updateFood() {
+    document.getElementById("foodAmount").textContent =
+      this.foodAmount.toString();
+  }
+
   update() {
     this.now = window.performance.now() / 1000;
     const delta = this.time.update().getDelta();
     this.updateInput();
+    this.updateFood();
     this.animatePacman();
+    // this.renderHud(this.renderer, this.hudCamera, this);
     this.entityManager.update(delta);
 
-    console.log(this.now);
+    // console.log(this.now);
     if (this.numGhosts < 4 && this.now - this.ghostSpawnTime > 8) {
-      console.log(this.map.ghostSpawn);
+      // console.log(this.map.ghostSpawn);
       this.createGhost(this, this.map.ghostSpawn);
       this.numGhosts += 1;
       this.ghostSpawnTime = this.now;
     }
 
     this.children.forEach((child) => {
+      //@ts-ignore
       if (child.isGhost) this.updateGhost(child, delta, this.now);
+      //@ts-ignore
+      // Kinda buggy
+      // if (child.isWrapper) this.wrapObject(child, this.map);
+      //@ts-ignore
+      if (child.isTemporary && this.now > child.removeAfter)
+        this.removeItems.push(child);
     });
+
+    // Cannot remove items from scene.children while iterating
+    // through it, so remove them after the forEach loop.
+    this.removeItems.forEach(this.remove, this);
+    for (let item in this.removeItems) {
+      if (this.removeItems.hasOwnProperty(item)) {
+        this.remove(this.removeItems[item]);
+        delete this.removeItems[item];
+      }
+    }
   }
 }

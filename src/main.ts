@@ -20,7 +20,7 @@ const mainCamera = new THREE.PerspectiveCamera(65, width / height, 0.1, 100);
 // const orbitControls = new OrbitControls(camera, renderer.domElement);
 // orbitControls.update();
 
-const scene = new PacManScene(mainCamera);
+const scene = new PacManScene(mainCamera, renderer);
 scene.initialize();
 
 const stats = new Stats();
